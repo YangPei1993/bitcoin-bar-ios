@@ -87,7 +87,7 @@ final class LiveActivityManager {
         do {
             let activity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: initialState, staleDate: Date().addingTimeInterval(900)),
+                content: .init(state: initialState, staleDate: nil),
                 pushType: nil
             )
             currentActivity = activity
@@ -154,23 +154,47 @@ final class LiveActivityManager {
     }
 
     func pushUpdateNow() async {
-        let activeActivity: Activity<TickerActivityAttributes>? = {
-            if let current = currentActivity, current.activityState == .active {
+        // .active 与 .stale 均为可更新的存活状态，仅排除 .ended / .dismissed
+        let updatable: Activity<TickerActivityAttributes>? = {
+            if let current = currentActivity, isUpdatable(current) {
                 return current
             }
-            return Activity<TickerActivityAttributes>.activities.first(where: { $0.activityState == .active })
+            return Activity<TickerActivityAttributes>.activities.first(where: { isUpdatable($0) })
         }()
 
-        guard let activity = activeActivity else {
+        guard let activity = updatable else {
             isActive = false
             currentActivity = nil
             return
         }
 
         currentActivity = activity
+        isActive = true
         lastPushTime = Date()
         let state = buildContentState()
-        await activity.update(.init(state: state, staleDate: Date().addingTimeInterval(900)))
+        await activity.update(.init(state: state, staleDate: nil))
+    }
+
+    /// 锁屏解锁回到前台时恢复订阅与灵动岛绑定
+    func ensureSyncedOnForeground() {
+        endBackgroundKeepAlive()
+        throttleTask?.cancel()
+        throttleTask = nil
+
+        if let existing = Activity<TickerActivityAttributes>.activities.first(where: { isUpdatable($0) }) {
+            currentActivity = existing
+            isActive = true
+            hub.setDemand(settings.liveActivityAssets, for: "live_activity")
+            portfolio.setLiveActivityActive(true)
+            observeState(of: existing)
+        } else {
+            currentActivity = nil
+            isActive = false
+        }
+    }
+
+    private func isUpdatable(_ activity: Activity<TickerActivityAttributes>) -> Bool {
+        activity.activityState == .active || activity.activityState == .stale
     }
 
     // MARK: 退后台短时续命（切回主屏幕 / 锁屏后约 25 秒内仍持续实时刷新灵动岛）
@@ -212,7 +236,7 @@ final class LiveActivityManager {
     // MARK: 状态恢复与监听
 
     private func restoreExistingActivityIfAny() {
-        if let existing = Activity<TickerActivityAttributes>.activities.first(where: { $0.activityState == .active }) {
+        if let existing = Activity<TickerActivityAttributes>.activities.first(where: { isUpdatable($0) }) {
             currentActivity = existing
             isActive = true
             hub.setDemand(settings.liveActivityAssets, for: "live_activity")

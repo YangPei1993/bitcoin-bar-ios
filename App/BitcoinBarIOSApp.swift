@@ -34,7 +34,20 @@ final class AppContainer {
         self.liveActivity = LiveActivityManager(hub: hub, portfolio: portfolioStore, riskEngine: riskEngine, settings: settings)
 
         bindCallbacks()
+        registerLiveActivityRefreshBridge()
         hub.start()
+    }
+
+    private func registerLiveActivityRefreshBridge() {
+        LiveActivityRefreshBridge.asyncHandler = { [weak self] in
+            guard let self else { return }
+            self.liveActivity.ensureSyncedOnForeground()
+            await self.hub.refreshNow()
+            if self.portfolioStore.enabledAccounts.isEmpty == false {
+                await self.portfolioStore.refreshAll()
+            }
+            await self.liveActivity.pushUpdateNow()
+        }
     }
 
     func showToast(_ message: String) {
@@ -169,9 +182,9 @@ struct BitcoinBarIOSApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active:
-                        container.liveActivity.endBackgroundKeepAlive()
+                        container.liveActivity.ensureSyncedOnForeground()
+                        container.hub.reconnectNow()
                         Task {
-                            await container.hub.refreshNow()
                             if container.portfolioStore.enabledAccounts.isEmpty == false {
                                 await container.portfolioStore.refreshAll()
                             }

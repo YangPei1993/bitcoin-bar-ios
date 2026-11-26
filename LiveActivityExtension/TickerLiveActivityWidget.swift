@@ -1,4 +1,5 @@
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -41,31 +42,42 @@ struct TickerLiveActivityWidget: Widget {
                     .padding(.leading, 4)
                 }
 
-                // 展开态右上：合约未实现盈亏 或 强平风险告警
+                // 展开态右上：合约未实现盈亏 / 风险告警 + 原地刷新按钮
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        if let risk = state.criticalRiskLabel {
-                            Text(risk)
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red, in: Capsule())
-                                .lineLimit(1)
-                        } else if let pnl = state.unrealizedPnL {
-                            Text("未实现盈亏")
-                                .font(.system(size: 9.5))
-                                .foregroundStyle(.white.opacity(0.55))
-                            Text(state.hideAmounts ? "****" : LiveActivityFormatter.signedUSD(pnl))
-                                .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(state.hideAmounts ? .white.opacity(0.7) : changeColor(pnl, isGreenUp: state.isGreenUp))
-                        } else {
-                            Text(state.updatedAt, style: .time)
-                                .font(.system(size: 10, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(.white.opacity(0.55))
+                    HStack(spacing: 6) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            if let risk = state.criticalRiskLabel {
+                                Text(risk)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.red, in: Capsule())
+                                    .lineLimit(1)
+                            } else if let pnl = state.unrealizedPnL {
+                                Text("未实现盈亏")
+                                    .font(.system(size: 9.5))
+                                    .foregroundStyle(.white.opacity(0.55))
+                                Text(state.hideAmounts ? "****" : LiveActivityFormatter.signedUSD(pnl))
+                                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                                    .monospacedDigit()
+                                    .foregroundStyle(state.hideAmounts ? .white.opacity(0.7) : changeColor(pnl, isGreenUp: state.isGreenUp))
+                            } else {
+                                Text(state.updatedAt, style: .time)
+                                    .font(.system(size: 10, design: .rounded))
+                                    .monospacedDigit()
+                                    .foregroundStyle(.white.opacity(0.55))
+                            }
                         }
+
+                        Button(intent: RefreshLiveActivityIntent()) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.82))
+                                .frame(width: 24, height: 24)
+                                .background(.white.opacity(0.14), in: Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.trailing, 4)
                 }
@@ -177,6 +189,15 @@ private struct LockScreenLiveView: View {
                         .monospacedDigit()
                         .foregroundStyle(.white.opacity(0.55))
                 }
+
+                Button(intent: RefreshLiveActivityIntent()) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 22, height: 22)
+                        .background(.white.opacity(0.14), in: Circle())
+                }
+                .buttonStyle(.plain)
             }
 
             if let risk = state.criticalRiskLabel {

@@ -1,5 +1,30 @@
 import ActivityKit
+import AppIntents
 import Foundation
+
+// MARK: - 灵动岛 / 锁屏一键原地刷新 Intent（无需打开 App 即可刷新余额与现价）
+
+nonisolated struct RefreshLiveActivityIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "刷新灵动岛行情与余额"
+    static var description = IntentDescription("立即拉取最新币种现价与账户总余额并更新到灵动岛。")
+
+    func perform() async throws -> some IntentResult {
+        await MainActor.run {
+            LiveActivityRefreshBridge.onTrigger?()
+        }
+        if let handler = await MainActor.run(body: { LiveActivityRefreshBridge.asyncHandler }) {
+            await handler()
+        }
+        return .result()
+    }
+}
+
+/// 主 App 启动时注册的刷新桥接（LiveActivityIntent 在主 App 进程内执行）
+@MainActor
+enum LiveActivityRefreshBridge {
+    static var onTrigger: (() -> Void)?
+    static var asyncHandler: (@MainActor () async -> Void)?
+}
 
 // MARK: - 灵动岛 & 锁屏实时活动共享模型（App 与 LiveActivityExtension 共享）
 
