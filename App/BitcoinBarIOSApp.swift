@@ -126,7 +126,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Se
 
 @main
 struct BitcoinBarIOSApp: App {
-    @State private var container = AppContainer()
+    @State private var container: AppContainer
     @Environment(\.scenePhase) private var scenePhase
     private let notificationDelegate: NotificationDelegate
 
@@ -169,6 +169,7 @@ struct BitcoinBarIOSApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active:
+                        container.liveActivity.endBackgroundKeepAlive()
                         Task {
                             await container.hub.refreshNow()
                             if container.portfolioStore.enabledAccounts.isEmpty == false {
@@ -177,6 +178,7 @@ struct BitcoinBarIOSApp: App {
                             await container.liveActivity.pushUpdateNow()
                         }
                     case .background:
+                        container.liveActivity.beginBackgroundKeepAlive()
                         container.scheduleBackgroundRefresh()
                     default:
                         break

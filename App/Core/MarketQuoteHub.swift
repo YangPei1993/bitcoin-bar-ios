@@ -57,6 +57,7 @@ final class MarketQuoteHub {
     @ObservationIgnored private var activeAssetIDs: [String] = []
     @ObservationIgnored private var pendingQuotes: [String: CryptoQuote] = [:]
     @ObservationIgnored private var listeners: [(String, CryptoQuote) -> Void] = []
+    @ObservationIgnored private var batchObservers: [(Set<String>) -> Void] = []
     @ObservationIgnored private var flashSequence = 0
 
     @ObservationIgnored private var streamTask: Task<Void, Never>?
@@ -102,6 +103,11 @@ final class MarketQuoteHub {
 
     func addListener(_ listener: @escaping (String, CryptoQuote) -> Void) {
         listeners.append(listener)
+    }
+
+    /// 在 quotes 字典真正提交更新后触发，确保订阅者（如灵动岛）读到的是最新价
+    func addBatchObserver(_ observer: @escaping (Set<String>) -> Void) {
+        batchObservers.append(observer)
     }
 
     func setDemand(_ assets: [CryptoAsset], for source: String) {
@@ -295,6 +301,10 @@ final class MarketQuoteHub {
             }
         }
         lastUpdatedAt = latestDate ?? Date()
+        let updatedIDs = Set(batch.keys)
+        for observer in batchObservers {
+            observer(updatedIDs)
+        }
     }
 
     private func startFallbackPollLoop() {
