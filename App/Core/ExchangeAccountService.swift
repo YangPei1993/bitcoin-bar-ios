@@ -659,7 +659,21 @@ nonisolated struct ExchangeAccountService: Sendable {
         return try JSONDecoder().decode(type, from: data)
     }
 
+    private static let priceCacheLock = NSLock()
+    private static var binancePriceCache: (fetchedAt: Date, baseURL: String, prices: [String: Double])?
+
     private func fetchBinanceSpotPrices(baseURL: String) async throws -> [String: Double] {
+        // 20 秒短缓存，避免每 5 秒刷新余额时重复下载全市场价格列表
+        let cached: [String: Double]? = Self.priceCacheLock.withLock {
+            if let entry = Self.binancePriceCache,
+               entry.baseURL == baseURL,
+               Date().timeIntervalSince(entry.fetchedAt) < 20 {
+                return entry.prices
+            }
+            return nil
+        }
+        if let cached { return cached }
+
         guard let url = URL(string: "\(baseURL)/api/v3/ticker/price") else { return [:] }
         let (data, _) = try await performRequest(URLRequest(url: url))
         let list = try JSONDecoder().decode([BinancePriceTicker].self, from: data)
@@ -669,6 +683,9 @@ nonisolated struct ExchangeAccountService: Sendable {
             if let value = Double(item.price) {
                 prices[item.symbol] = value
             }
+        }
+        Self.priceCacheLock.withLock {
+            Self.binancePriceCache = (Date(), baseURL, prices)
         }
         return prices
     }

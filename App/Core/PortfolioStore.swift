@@ -277,8 +277,10 @@ final class PortfolioStore {
 
     func setLiveActivityActive(_ active: Bool) {
         liveActivityActive = active
+        backgroundAlertTask?.cancel()
+        backgroundAlertTask = nil
         syncBackgroundAlertMonitor()
-        if active && enabledAccounts.isEmpty == false && snapshots.isEmpty {
+        if active && enabledAccounts.isEmpty == false {
             Task { await refreshAll() }
         }
     }
@@ -368,8 +370,10 @@ final class PortfolioStore {
             guard backgroundAlertTask == nil else { return }
             backgroundAlertTask = Task { [weak self] in
                 while Task.isCancelled == false {
-                    try? await Task.sleep(for: .seconds(45))
-                    guard Task.isCancelled == false, let self else { return }
+                    guard let self else { return }
+                    let intervalSeconds: Double = self.liveActivityActive ? 5 : 20
+                    try? await Task.sleep(for: .seconds(intervalSeconds))
+                    guard Task.isCancelled == false else { return }
                     if self.foregroundRefreshTask == nil {
                         await self.refreshAll()
                     }
@@ -476,7 +480,7 @@ final class PortfolioStore {
         foregroundRefreshTask = Task { [weak self] in
             while Task.isCancelled == false {
                 await self?.refreshAll()
-                try? await Task.sleep(for: .seconds(25))
+                try? await Task.sleep(for: .seconds(5))
             }
         }
     }
