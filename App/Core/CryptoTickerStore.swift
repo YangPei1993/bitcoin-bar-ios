@@ -1365,6 +1365,7 @@ nonisolated private struct OKXTicker: Decodable {
     let instType: String?
     let last: String
     let open24h: String
+    let sodUtc0: String?
     let ts: String
     let high24h: String
     let low24h: String
@@ -1376,6 +1377,7 @@ nonisolated private struct OKXTicker: Decodable {
         case instType
         case last
         case open24h
+        case sodUtc0
         case ts
         case high24h
         case low24h
@@ -1389,6 +1391,7 @@ nonisolated private struct OKXTicker: Decodable {
         instType = try container.decodeIfPresent(String.self, forKey: .instType)
         last = try container.decode(String.self, forKey: .last)
         open24h = try container.decode(String.self, forKey: .open24h)
+        sodUtc0 = try container.decodeIfPresent(String.self, forKey: .sodUtc0)
         ts = try container.decode(String.self, forKey: .ts)
         high24h = try container.decodeIfPresent(String.self, forKey: .high24h) ?? last
         low24h = try container.decodeIfPresent(String.self, forKey: .low24h) ?? last
@@ -1398,7 +1401,11 @@ nonisolated private struct OKXTicker: Decodable {
 
     func quote() throws -> CryptoQuote {
         let price = try last.doubleValue()
-        let open = try open24h.doubleValue()
+        // 优先使用 UTC+0 00:00 开盘价 (sodUtc0) 计算当日涨跌幅；新上线品种缺失时回退 24h 开盘价
+        let utc0Open = sodUtc0
+            .flatMap { try? $0.doubleValue() }
+            .flatMap { $0 > 0 ? $0 : nil }
+        let open = try utc0Open ?? open24h.doubleValue()
         let change = open == 0 ? 0 : ((price - open) / open) * 100
 
         // 现货：vol24h=基础币数量，volCcy24h=计价币成交额
@@ -1670,6 +1677,7 @@ nonisolated private struct GateSpotTicker: Decodable {
     let currencyPair: String
     let last: String
     let changePercentage: String
+    let changeUtc0: String?
     let baseVolume: String
     let quoteVolume: String
     let high24h: String
@@ -1679,6 +1687,7 @@ nonisolated private struct GateSpotTicker: Decodable {
         case currencyPair = "currency_pair"
         case last
         case changePercentage = "change_percentage"
+        case changeUtc0 = "change_utc0"
         case baseVolume = "base_volume"
         case quoteVolume = "quote_volume"
         case high24h = "high_24h"
@@ -1690,6 +1699,7 @@ nonisolated private struct GateSpotTicker: Decodable {
         currencyPair = try container.decode(String.self, forKey: .currencyPair)
         last = try container.decode(String.self, forKey: .last)
         changePercentage = (try? container.decode(String.self, forKey: .changePercentage)) ?? "0"
+        changeUtc0 = try? container.decodeIfPresent(String.self, forKey: .changeUtc0)
         baseVolume = (try? container.decode(String.self, forKey: .baseVolume)) ?? "0"
         quoteVolume = (try? container.decode(String.self, forKey: .quoteVolume)) ?? "0"
         high24h = (try? container.decode(String.self, forKey: .high24h)) ?? last
@@ -1698,9 +1708,11 @@ nonisolated private struct GateSpotTicker: Decodable {
 
     func quote(updatedAt: Date = Date()) throws -> CryptoQuote {
         let price = try last.doubleValue()
+        let resolvedChange = changeUtc0.flatMap { try? $0.doubleValue() }
+            ?? ((try? changePercentage.doubleValue()) ?? 0)
         return CryptoQuote(
             price: price,
-            changePercentage24h: (try? changePercentage.doubleValue()) ?? 0,
+            changePercentage24h: resolvedChange,
             updatedAt: updatedAt,
             high24h: (try? high24h.doubleValue()) ?? price,
             low24h: (try? low24h.doubleValue()) ?? price,

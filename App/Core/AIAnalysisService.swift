@@ -261,7 +261,7 @@ nonisolated struct AIAnalysisService: Sendable {
         if let quote = context.quote {
             quoteText = """
             最新价: \(quote.price)
-            24h涨跌幅: \(String(format: "%.2f", quote.changePercentage24h))%
+            今日涨跌幅(UTC+0): \(String(format: "%.2f", quote.changePercentage24h))%
             24h最高: \(quote.high24h)
             24h最低: \(quote.low24h)
             24h成交额(USDT): \(String(format: "%.0f", quote.volumeCurrency24h))

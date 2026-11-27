@@ -127,6 +127,10 @@ struct AssetDetailView: View {
                                 .font(.caption.weight(.medium))
                                 .monospacedDigit()
                                 .foregroundStyle(color)
+
+                            Text("UTC+0")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
                         }
                     } else {
                         Text("连接实时报价...")

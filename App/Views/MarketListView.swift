@@ -291,7 +291,7 @@ struct MarketListView: View {
             Spacer()
             sortButton("最新价", field: .price)
                 .frame(width: 100, alignment: .trailing)
-            sortButton("24h 涨跌", field: .change24h)
+            sortButton("UTC+0 涨跌", field: .change24h)
                 .frame(width: 82, alignment: .trailing)
         }
         .padding(.horizontal, 16)
