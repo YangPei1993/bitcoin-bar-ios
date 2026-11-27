@@ -6,6 +6,7 @@ struct SettingsView: View {
     let watchlist: WatchlistStore
     let tickerStore: CryptoTickerStore
     let portfolioStore: PortfolioStore
+    @Bindable var tradingStore: OKXTradingStore
     @Bindable var dispatcher: NotificationDispatcher
     let liveActivity: LiveActivityManager
     let onShowToast: (String) -> Void
@@ -56,16 +57,34 @@ struct SettingsView: View {
                 }
             }
 
-            // 3. 交易所账户 / 推送通道 / AI 助手
+            // 3. 交易所账户 / 交易安全 / 推送通道 / AI 助手
             Section("账户与扩展能力") {
                 NavigationLink {
                     ExchangeAccountsSettingsView(portfolioStore: portfolioStore)
                 } label: {
                     HStack {
-                        Label("OKX / 币安只读账户", systemImage: "wallet.bifold")
+                        Label("OKX / 币安账户", systemImage: "wallet.bifold")
                         Spacer()
                         Text("\(portfolioStore.accounts.count) 个")
                             .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                NavigationLink {
+                    Form {
+                        Section {
+                            TradingSecuritySettingsContent(tradingStore: tradingStore)
+                        }
+                    }
+                    .navigationTitle("OKX 交易与安全")
+                    .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    HStack {
+                        Label("OKX 交易与安全", systemImage: "lock.shield")
+                        Spacer()
+                        Text(tradingModeBadgeText)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(tradingStore.config.tradingEnabled ? (tradingStore.config.preferSimulatedOnly ? .orange : MarketColors.green) : .secondary)
                     }
                 }
 
@@ -117,6 +136,11 @@ struct SettingsView: View {
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var tradingModeBadgeText: String {
+        guard tradingStore.config.tradingEnabled else { return "仅只读" }
+        return tradingStore.config.preferSimulatedOnly ? "模拟盘锁" : "已开启"
     }
 }
 

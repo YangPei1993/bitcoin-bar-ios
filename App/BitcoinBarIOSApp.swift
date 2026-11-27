@@ -18,6 +18,7 @@ final class AppContainer {
     private(set) var tickerStore: CryptoTickerStore!
     private(set) var alertStore: PriceAlertStore!
     private(set) var portfolioStore: PortfolioStore!
+    private(set) var tradingStore: OKXTradingStore!
     private(set) var riskEngine: RiskMonitorEngine!
     private(set) var liveActivity: LiveActivityManager!
 
@@ -31,6 +32,7 @@ final class AppContainer {
         self.tickerStore = CryptoTickerStore(hub: hub)
         self.alertStore = PriceAlertStore(hub: hub, dispatcher: dispatcher)
         self.portfolioStore = PortfolioStore(dispatcher: dispatcher)
+        self.tradingStore = OKXTradingStore(portfolio: portfolioStore)
         self.riskEngine = RiskMonitorEngine(hub: hub, watchlist: watchlist, portfolio: portfolioStore, dispatcher: dispatcher)
         self.liveActivity = LiveActivityManager(hub: hub, portfolio: portfolioStore, riskEngine: riskEngine, settings: settings)
 
@@ -105,6 +107,10 @@ final class AppContainer {
         portfolioStore.setExternalRiskMonitoringEnabled(riskEngine.config.hasPortfolioRiskRuleEnabled)
         riskEngine.onConfigChanged = { [weak self] config in
             self?.portfolioStore.setExternalRiskMonitoringEnabled(config.hasPortfolioRiskRuleEnabled)
+        }
+
+        tradingStore.onTradeExecuted = { [weak self] in
+            await self?.liveActivity.pushUpdateNow()
         }
     }
 }
@@ -234,6 +240,7 @@ private struct RootTabView: View {
                 NavigationStack(path: $container.portfolioPath) {
                     PortfolioView(
                         portfolio: container.portfolioStore,
+                        tradingStore: container.tradingStore,
                         riskEngine: container.riskEngine,
                         liveActivity: container.liveActivity,
                         settings: container.settings,
@@ -278,6 +285,7 @@ private struct RootTabView: View {
                         watchlist: container.watchlist,
                         tickerStore: container.tickerStore,
                         portfolioStore: container.portfolioStore,
+                        tradingStore: container.tradingStore,
                         dispatcher: container.dispatcher,
                         liveActivity: container.liveActivity,
                         onShowToast: { container.showToast($0) }
@@ -310,10 +318,14 @@ private struct RootTabView: View {
             tickerStore: container.tickerStore,
             watchlist: container.watchlist,
             alertStore: container.alertStore,
+            tradingStore: container.tradingStore,
             liveActivity: container.liveActivity,
             settings: container.settings,
             aiCache: container.aiCache,
             onOpenAISettings: {
+                container.selectedTab = 3
+            },
+            onOpenTradingSettings: {
                 container.selectedTab = 3
             },
             onShowToast: { container.showToast($0) }

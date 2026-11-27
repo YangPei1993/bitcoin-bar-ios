@@ -37,6 +37,7 @@ targets:
         UIBackgroundModes:
           - fetch
         ITSAppUsesNonExemptEncryption: false
+        NSFaceIDUsageDescription: 用于在执行 OKX 下单、平仓、止盈止损及撤单前验证您的身份，防止误操作。
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:

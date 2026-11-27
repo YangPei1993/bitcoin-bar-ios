@@ -141,6 +141,10 @@ nonisolated struct AccountPositionItem: Identifiable, Equatable, Sendable {
     let displayPair: String
     let side: PositionSide
     let marginMode: String
+    /// 交易所原始持仓方向（OKX: "long" / "short" / "net"），用于精确平仓与挂 TP/SL
+    let rawPosSide: String
+    /// 交易所原始保证金模式（OKX: "cross" / "isolated"）
+    let rawMarginMode: String
     let leverage: Double
     let quantity: Double
     let notionalUSD: Double
@@ -150,6 +154,46 @@ nonisolated struct AccountPositionItem: Identifiable, Equatable, Sendable {
     let unrealizedPnL: Double
     /// 收益率百分比，例如 12.5 表示 +12.5%
     let roePercent: Double
+
+    init(
+        id: String,
+        accountID: UUID,
+        accountName: String,
+        exchange: ExchangeKind,
+        marketAsset: CryptoAsset,
+        displayPair: String,
+        side: PositionSide,
+        marginMode: String,
+        rawPosSide: String? = nil,
+        rawMarginMode: String? = nil,
+        leverage: Double,
+        quantity: Double,
+        notionalUSD: Double,
+        entryPrice: Double,
+        markPrice: Double,
+        liquidationPrice: Double?,
+        unrealizedPnL: Double,
+        roePercent: Double
+    ) {
+        self.id = id
+        self.accountID = accountID
+        self.accountName = accountName
+        self.exchange = exchange
+        self.marketAsset = marketAsset
+        self.displayPair = displayPair
+        self.side = side
+        self.marginMode = marginMode
+        self.rawPosSide = rawPosSide ?? side.rawValue
+        self.rawMarginMode = rawMarginMode ?? (marginMode == "逐仓" ? "isolated" : "cross")
+        self.leverage = leverage
+        self.quantity = quantity
+        self.notionalUSD = notionalUSD
+        self.entryPrice = entryPrice
+        self.markPrice = markPrice
+        self.liquidationPrice = liquidationPrice
+        self.unrealizedPnL = unrealizedPnL
+        self.roePercent = roePercent
+    }
 }
 
 nonisolated struct AccountSnapshot: Equatable, Sendable {
@@ -334,6 +378,9 @@ nonisolated struct ExchangeAccountService: Sendable {
                 instrumentKind: kind
             )
 
+            let rawPosSide = (raw.posSide?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()).flatMap { $0.isEmpty ? nil : $0 } ?? "net"
+            let rawMarginMode = (raw.mgnMode?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()).flatMap { $0.isEmpty ? nil : $0 } ?? "cross"
+
             positions.append(
                 AccountPositionItem(
                     id: "\(profile.id.uuidString)-\(raw.instId)-\(side.rawValue)-\(marginMode)",
@@ -344,6 +391,8 @@ nonisolated struct ExchangeAccountService: Sendable {
                     displayPair: "\(baseSymbol)/\(quoteSymbol)",
                     side: side,
                     marginMode: marginMode,
+                    rawPosSide: rawPosSide,
+                    rawMarginMode: rawMarginMode,
                     leverage: leverage,
                     quantity: abs(rawPos),
                     notionalUSD: notional,

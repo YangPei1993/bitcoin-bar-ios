@@ -2,20 +2,23 @@ import SwiftUI
 
 private enum PortfolioSubTab: String, CaseIterable, Identifiable {
     case positions
+    case orders
     case balances
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .positions: return "合约仓位"
-        case .balances: return "账户余额"
+        case .positions: return "仓位"
+        case .orders: return "委托"
+        case .balances: return "余额"
         }
     }
 }
 
 struct PortfolioView: View {
     @Bindable var portfolio: PortfolioStore
+    @Bindable var tradingStore: OKXTradingStore
     let riskEngine: RiskMonitorEngine
     let liveActivity: LiveActivityManager
     let settings: AppSettings
@@ -25,6 +28,8 @@ struct PortfolioView: View {
 
     @State private var selectedAccountID: UUID?
     @State private var subTab: PortfolioSubTab = .positions
+    @State private var closingPosition: AccountPositionItem?
+    @State private var tpslPosition: AccountPositionItem?
 
     @State private var isShowingAddBalanceAlert = false
     @State private var draftScopeKey = "total"
@@ -50,6 +55,13 @@ struct PortfolioView: View {
                         subTabHeader
                         if subTab == .positions {
                             positionsSection
+                        } else if subTab == .orders {
+                            OpenOrdersSectionView(
+                                tradingStore: tradingStore,
+                                selectedAccountID: selectedAccountID,
+                                settings: settings,
+                                onShowToast: onShowToast
+                            )
                         } else {
                             balancesSection
                         }
@@ -59,6 +71,7 @@ struct PortfolioView: View {
                 .background(Color(.systemGroupedBackground))
                 .refreshable {
                     await portfolio.refreshAll()
+                    await tradingStore.refreshOrders()
                     await liveActivity.pushUpdateNow()
                 }
             }
@@ -81,13 +94,29 @@ struct PortfolioView: View {
         .onAppear {
             if portfolio.enabledAccounts.isEmpty == false {
                 portfolio.startAutoRefresh()
+                Task { await tradingStore.refreshOrders() }
             }
         }
         .onDisappear {
             portfolio.stopAutoRefresh()
         }
+        .onChange(of: subTab) { _, newTab in
+            if newTab == .orders {
+                Task { await tradingStore.refreshOrders() }
+            }
+        }
         .sheet(isPresented: $isShowingAddBalanceAlert) {
             addBalanceAlertSheet
+        }
+        .sheet(item: $closingPosition) { pos in
+            ClosePositionSheet(position: pos, settings: settings, tradingStore: tradingStore) { msg in
+                onShowToast(msg)
+            }
+        }
+        .sheet(item: $tpslPosition) { pos in
+            TPSLSheet(position: pos, settings: settings, tradingStore: tradingStore) { msg in
+                onShowToast(msg)
+            }
         }
     }
 
@@ -259,9 +288,11 @@ struct PortfolioView: View {
         HStack {
             Picker("", selection: $subTab) {
                 ForEach(PortfolioSubTab.allCases) { tab in
-                    let count = tab == .positions
-                        ? portfolio.positions(accountID: selectedAccountID).count
-                        : portfolio.balances(accountID: selectedAccountID).count
+                    let count: Int = switch tab {
+                    case .positions: portfolio.positions(accountID: selectedAccountID).count
+                    case .orders: tradingStore.pendingOrders(accountID: selectedAccountID).count + tradingStore.algoOrders(accountID: selectedAccountID).count
+                    case .balances: portfolio.balances(accountID: selectedAccountID).count
+                    }
                     Text("\(tab.label) (\(count))").tag(tab)
                 }
             }
@@ -284,9 +315,21 @@ struct PortfolioView: View {
         } else {
             LazyVStack(spacing: 10) {
                 ForEach(items) { pos in
-                    PositionCardIOS(position: pos, hideAmounts: portfolio.hideAmounts, settings: settings) {
-                        onSelectPositionAsset(pos.marketAsset)
-                    }
+                    PositionCardIOS(
+                        position: pos,
+                        hideAmounts: portfolio.hideAmounts,
+                        canTrade: tradingStore.config.tradingEnabled && pos.exchange == .okx,
+                        settings: settings,
+                        onTap: {
+                            onSelectPositionAsset(pos.marketAsset)
+                        },
+                        onClose: {
+                            closingPosition = pos
+                        },
+                        onTPSL: {
+                            tpslPosition = pos
+                        }
+                    )
                 }
             }
         }
@@ -448,74 +491,102 @@ struct PortfolioView: View {
 private struct PositionCardIOS: View {
     let position: AccountPositionItem
     let hideAmounts: Bool
+    let canTrade: Bool
     let settings: AppSettings
     let onTap: () -> Void
+    let onClose: () -> Void
+    let onTPSL: () -> Void
 
     var body: some View {
         let sideColor = position.side == .long ? settings.upColor : settings.downColor
         let pnlColor = settings.changeColor(for: position.unrealizedPnL)
         let liqDistance = RiskMonitorEngine.liquidationDistancePercent(for: position)
 
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    CoinAvatar(symbol: position.marketAsset.symbol, size: 28)
+        VStack(alignment: .leading, spacing: 10) {
+            Button(action: onTap) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        CoinAvatar(symbol: position.marketAsset.symbol, size: 28)
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 5) {
-                            Text(position.displayPair).font(.subheadline.weight(.bold))
-                            Text(position.side.label)
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(sideColor, in: RoundedRectangle(cornerRadius: 4))
-                            Text("\(Int(position.leverage.rounded()))x \(position.marginMode)")
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 4))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        HStack(spacing: 6) {
-                            Text("\(position.exchange.shortLabel) · \(position.accountName)")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            if let liqDistance, liqDistance <= 12 {
-                                let isCrit = liqDistance <= 5
-                                Text("距强平 \(String(format: "%.1f", liqDistance))%")
-                                    .font(.system(size: 10, weight: .bold).monospacedDigit())
-                                    .foregroundStyle(isCrit ? .white : .orange)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 5) {
+                                Text(position.displayPair).font(.subheadline.weight(.bold))
+                                Text(position.side.label)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
                                     .padding(.horizontal, 5).padding(.vertical, 1)
-                                    .background(isCrit ? MarketColors.red : Color.orange.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+                                    .background(sideColor, in: RoundedRectangle(cornerRadius: 4))
+                                Text("\(Int(position.leverage.rounded()))x \(position.marginMode)")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 4))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            HStack(spacing: 6) {
+                                Text("\(position.exchange.shortLabel) · \(position.accountName)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                if let liqDistance, liqDistance <= 12 {
+                                    let isCrit = liqDistance <= 5
+                                    Text("距强平 \(String(format: "%.1f", liqDistance))%")
+                                        .font(.system(size: 10, weight: .bold).monospacedDigit())
+                                        .foregroundStyle(isCrit ? .white : .orange)
+                                        .padding(.horizontal, 5).padding(.vertical, 1)
+                                        .background(isCrit ? MarketColors.red : Color.orange.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+                                }
                             }
                         }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(hideAmounts ? "****" : MarketFormatter.changeAmount(position.unrealizedPnL))
+                                .font(.subheadline.weight(.bold))
+                                .monospacedDigit()
+                                .foregroundStyle(hideAmounts ? .secondary : pnlColor)
+                            Text(MarketFormatter.changePercent(position.roePercent))
+                                .font(.caption.weight(.semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(pnlColor)
+                        }
                     }
 
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(hideAmounts ? "****" : MarketFormatter.changeAmount(position.unrealizedPnL))
-                            .font(.subheadline.weight(.bold))
-                            .monospacedDigit()
-                            .foregroundStyle(hideAmounts ? .secondary : pnlColor)
-                        Text(MarketFormatter.changePercent(position.roePercent))
-                            .font(.caption.weight(.semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(pnlColor)
+                    HStack(spacing: 6) {
+                        metric("持仓价值", hideAmounts ? "****" : MarketFormatter.price(position.notionalUSD))
+                        metric("开仓均价", MarketFormatter.price(position.entryPrice))
+                        metric("标记价格", MarketFormatter.price(position.markPrice))
+                        metric("预估强平", position.liquidationPrice.map { MarketFormatter.price($0) } ?? "--", accent: position.liquidationPrice != nil ? .orange : nil)
                     }
                 }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
-                HStack(spacing: 6) {
-                    metric("持仓价值", hideAmounts ? "****" : MarketFormatter.price(position.notionalUSD))
-                    metric("开仓均价", MarketFormatter.price(position.entryPrice))
-                    metric("标记价格", MarketFormatter.price(position.markPrice))
-                    metric("预估强平", position.liquidationPrice.map { MarketFormatter.price($0) } ?? "--", accent: position.liquidationPrice != nil ? .orange : nil)
+            if canTrade {
+                Divider()
+                HStack(spacing: 10) {
+                    Button(action: onTPSL) {
+                        Label("止盈止损", systemImage: "scope")
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: onClose) {
+                        Label("快捷平仓", systemImage: "xmark.circle.fill")
+                            .font(.caption.weight(.bold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(MarketColors.red)
                 }
             }
-            .padding(14)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func metric(_ title: String, _ value: String, accent: Color? = nil) -> some View {

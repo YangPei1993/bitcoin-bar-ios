@@ -25,6 +25,7 @@
 		73B353943F02241EBA7D8F16 /* BitcoinBarIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E658EB890C664DAB0559C1 /* BitcoinBarIOSApp.swift */; };
 		750FCFDD164AD1DED4B24F0E /* BitcoinBarLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 93969E1C6BCB4E084692F3C3 /* BitcoinBarLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		7784EB3A44F7A86CF435125E /* TickerLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09FB204A86D8806324D37BA3 /* TickerLiveActivityAttributes.swift */; };
+		779FB9DF28CEDC96717465CD /* OKXTradingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 722E2046ED494EAB62024008 /* OKXTradingService.swift */; };
 		7904326EFF2FAF4FF10F199F /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506B8833C266FB8D172CDE85 /* AppSettings.swift */; };
 		7FCEE378EB0625B18E21811E /* RiskCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EC38774FA70ABFB908F940C /* RiskCenterView.swift */; };
 		889E9B8AE3759ED67F0AD0AF /* PortfolioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC1A60A3336647C249F8274 /* PortfolioView.swift */; };
@@ -32,6 +33,7 @@
 		A8B6A164F38FE183B1862905 /* ExchangeAccountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2441E7F61F2D5C9F839E1882 /* ExchangeAccountService.swift */; };
 		BBDBE4338D5B2D9E67FF4A2B /* TickerLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09FB204A86D8806324D37BA3 /* TickerLiveActivityAttributes.swift */; };
 		D2C25DBA4016D1C081A6E09E /* AssetDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 697B775AC1706773C62FD72E /* AssetDetailView.swift */; };
+		F90F34633C4A05149BCA62BA /* TradeSheetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CF58A5EC866F64D85475FE /* TradeSheetsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +77,7 @@
 		670E253680AB97A847BCAC11 /* NotificationDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationDispatcher.swift; sourceTree = "<group>"; };
 		676926484A15329DC8257CAD /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
 		697B775AC1706773C62FD72E /* AssetDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetDetailView.swift; sourceTree = "<group>"; };
+		722E2046ED494EAB62024008 /* OKXTradingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OKXTradingService.swift; sourceTree = "<group>"; };
 		79A3B1D3FF18F0AD9159E4F3 /* PriceAlertStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertStore.swift; sourceTree = "<group>"; };
 		7BEB595472C5EDA3047806D2 /* PortfolioStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioStore.swift; sourceTree = "<group>"; };
 		93969E1C6BCB4E084692F3C3 /* BitcoinBarLiveActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BitcoinBarLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -82,6 +85,7 @@
 		98E658EB890C664DAB0559C1 /* BitcoinBarIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitcoinBarIOSApp.swift; sourceTree = "<group>"; };
 		AA92BC90FDAD60CA5BFA744E /* MarketListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketListView.swift; sourceTree = "<group>"; };
 		B0AADD8356673683B8D450EB /* TickerLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TickerLiveActivityWidget.swift; sourceTree = "<group>"; };
+		B1CF58A5EC866F64D85475FE /* TradeSheetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TradeSheetsView.swift; sourceTree = "<group>"; };
 		CCA432EADB7F40EAE0C03251 /* SparklineAndCharts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparklineAndCharts.swift; sourceTree = "<group>"; };
 		CDCB11269AFC888425367362 /* RiskMonitorEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskMonitorEngine.swift; sourceTree = "<group>"; };
 		D5B983AE3E7962E9700316CB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -116,6 +120,7 @@
 				1EC38774FA70ABFB908F940C /* RiskCenterView.swift */,
 				54D4A488AA971C4E46DA199D /* SettingsView.swift */,
 				CCA432EADB7F40EAE0C03251 /* SparklineAndCharts.swift */,
+				B1CF58A5EC866F64D85475FE /* TradeSheetsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -162,6 +167,7 @@
 				676926484A15329DC8257CAD /* LiveActivityManager.swift */,
 				64BBC7B4D488D5E9C0DFEBBF /* MarketQuoteHub.swift */,
 				670E253680AB97A847BCAC11 /* NotificationDispatcher.swift */,
+				722E2046ED494EAB62024008 /* OKXTradingService.swift */,
 				7BEB595472C5EDA3047806D2 /* PortfolioStore.swift */,
 				79A3B1D3FF18F0AD9159E4F3 /* PriceAlertStore.swift */,
 				CDCB11269AFC888425367362 /* RiskMonitorEngine.swift */,
@@ -274,6 +280,7 @@
 				249A56E9EC33234FE3D39DC1 /* MarketListView.swift in Sources */,
 				647EC445C0C0034E08A1A5C5 /* MarketQuoteHub.swift in Sources */,
 				205EF97187B4D5A6E9D980B5 /* NotificationDispatcher.swift in Sources */,
+				779FB9DF28CEDC96717465CD /* OKXTradingService.swift in Sources */,
 				304BE2E224CA08418C96EB6E /* PortfolioStore.swift in Sources */,
 				889E9B8AE3759ED67F0AD0AF /* PortfolioView.swift in Sources */,
 				676BB3FE9C9921DBBA34ECF1 /* PriceAlertStore.swift in Sources */,
@@ -282,6 +289,7 @@
 				06D5C2F919DDAFEA128354AE /* SettingsView.swift in Sources */,
 				1D1CD97935F567134AEFF3F5 /* SparklineAndCharts.swift in Sources */,
 				7784EB3A44F7A86CF435125E /* TickerLiveActivityAttributes.swift in Sources */,
+				F90F34633C4A05149BCA62BA /* TradeSheetsView.swift in Sources */,
 				3B2746A867D469081F27432E /* WatchlistStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
