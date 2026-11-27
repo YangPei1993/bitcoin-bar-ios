@@ -73,6 +73,11 @@ nonisolated enum AssetSearchTab: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+nonisolated enum QuoteSource: String, Equatable, Sendable {
+    case okx
+    case gate
+}
+
 nonisolated struct CryptoQuote: Equatable, Sendable {
     let price: Double
     let changePercentage24h: Double
@@ -83,6 +88,28 @@ nonisolated struct CryptoQuote: Equatable, Sendable {
     let volume24h: Double
     /// 24h 成交额（计价币，通常为 USDT）
     let volumeCurrency24h: Double
+    /// 行情来源，用于防止跨数据源面值不同的合约（如盘前/股票永续）互相污染
+    let source: QuoteSource
+
+    init(
+        price: Double,
+        changePercentage24h: Double,
+        updatedAt: Date,
+        high24h: Double,
+        low24h: Double,
+        volume24h: Double,
+        volumeCurrency24h: Double,
+        source: QuoteSource = .okx
+    ) {
+        self.price = price
+        self.changePercentage24h = changePercentage24h
+        self.updatedAt = updatedAt
+        self.high24h = high24h
+        self.low24h = low24h
+        self.volume24h = volume24h
+        self.volumeCurrency24h = volumeCurrency24h
+        self.source = source
+    }
 
     /// 24h 涨跌额
     var changeAmount24h: Double {
@@ -1678,7 +1705,8 @@ nonisolated private struct GateSpotTicker: Decodable {
             high24h: (try? high24h.doubleValue()) ?? price,
             low24h: (try? low24h.doubleValue()) ?? price,
             volume24h: (try? baseVolume.doubleValue()) ?? 0,
-            volumeCurrency24h: (try? quoteVolume.doubleValue()) ?? 0
+            volumeCurrency24h: (try? quoteVolume.doubleValue()) ?? 0,
+            source: .gate
         )
     }
 }
@@ -1722,7 +1750,8 @@ nonisolated private struct GateFuturesTicker: Decodable {
             high24h: (try? high24h.doubleValue()) ?? price,
             low24h: (try? low24h.doubleValue()) ?? price,
             volume24h: (try? volume24hBase.doubleValue()) ?? 0,
-            volumeCurrency24h: (try? volume24hQuote.doubleValue()) ?? 0
+            volumeCurrency24h: (try? volume24hQuote.doubleValue()) ?? 0,
+            source: .gate
         )
     }
 }

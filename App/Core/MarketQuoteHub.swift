@@ -250,6 +250,7 @@ final class MarketQuoteHub {
     }
 
     private func enqueueLiveQuote(assetID: String, quote: CryptoQuote) {
+        guard isQuoteConsistent(quote, for: assetID) else { return }
         if connectionState != .live {
             connectionState = .live
         }
@@ -279,7 +280,9 @@ final class MarketQuoteHub {
 
     private func applyBatch(_ batch: [String: CryptoQuote], notifyListeners: Bool) {
         var latestDate = lastUpdatedAt
+        var updatedIDs = Set<String>()
         for (assetID, newQuote) in batch {
+            guard isQuoteConsistent(newQuote, for: assetID) else { continue }
             if let oldQuote = quotes[assetID], oldQuote.price != newQuote.price {
                 flashSequence &+= 1
                 flashes[assetID] = PriceTickFlash(
@@ -288,6 +291,7 @@ final class MarketQuoteHub {
                 )
             }
             quotes[assetID] = newQuote
+            updatedIDs.insert(assetID)
             if let current = latestDate {
                 if newQuote.updatedAt > current { latestDate = newQuote.updatedAt }
             } else {
@@ -300,11 +304,24 @@ final class MarketQuoteHub {
                 }
             }
         }
+        guard updatedIDs.isEmpty == false else { return }
         lastUpdatedAt = latestDate ?? Date()
-        let updatedIDs = Set(batch.keys)
         for observer in batchObservers {
             observer(updatedIDs)
         }
+    }
+
+    /// 过滤跨数据源面值不一致的异源异常报价（例如同名盘前/股票永续在 OKX 与 Gate 计价单位不同）
+    private func isQuoteConsistent(_ incoming: CryptoQuote, for assetID: String) -> Bool {
+        guard incoming.price > 0, incoming.price.isFinite else { return false }
+        guard let existing = quotes[assetID], existing.price > 0 else { return true }
+        guard existing.source != incoming.source else { return true }
+        let ratio = abs(incoming.price - existing.price) / existing.price
+        // 主数据源 OKX 恢复时允许纠正备用源；但备用源 Gate 与 OKX 偏差超 35% 直接丢弃
+        if incoming.source == .gate && ratio >= 0.35 {
+            return false
+        }
+        return true
     }
 
     private func startFallbackPollLoop() {

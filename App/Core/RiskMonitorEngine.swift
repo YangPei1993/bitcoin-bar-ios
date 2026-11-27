@@ -77,12 +77,19 @@ final class RiskMonitorEngine {
         static let config = "RiskMonitorEngine.config"
         static let dailyPeakDate = "RiskMonitorEngine.dailyPeakDate"
         static let dailyPeakEquity = "RiskMonitorEngine.dailyPeakEquity"
+        static let dailyPeakAccounts = "RiskMonitorEngine.dailyPeakAccounts"
     }
 
     private struct TriggerRecord {
         let triggeredAt: Date
         /// 触发时的风险严重度指标（如强平距离越小越严峻，浮亏 ROE 越负越严峻）
         let metricValue: Double
+    }
+
+    private struct PriceSample {
+        let time: Date
+        let price: Double
+        let source: QuoteSource
     }
 
     var config: RiskAlertConfig {
@@ -106,8 +113,9 @@ final class RiskMonitorEngine {
 
     /// 触发记录表：key -> 上次触发时间与触发时指标
     @ObservationIgnored private var records: [String: TriggerRecord] = [:]
-    /// 短时异动价格采样窗口：assetID -> [(时间, 价格)]
-    @ObservationIgnored private var priceSamples: [String: [(Date, Double)]] = [:]
+    /// 短时异动价格采样窗口：assetID -> [PriceSample]
+    @ObservationIgnored private var priceSamples: [String: [PriceSample]] = [:]
+    @ObservationIgnored private var dailyPeakAccountsSignature = ""
     @ObservationIgnored var onConfigChanged: ((RiskAlertConfig) -> Void)?
 
     init(
@@ -132,6 +140,7 @@ final class RiskMonitorEngine {
         let today = Self.dayStamp(Date())
         if defaults.string(forKey: Keys.dailyPeakDate) == today {
             self.dailyPeakEquityUSD = defaults.double(forKey: Keys.dailyPeakEquity)
+            self.dailyPeakAccountsSignature = defaults.string(forKey: Keys.dailyPeakAccounts) ?? ""
         }
 
         hub.addListener { [weak self] assetID, quote in
@@ -282,9 +291,12 @@ final class RiskMonitorEngine {
 
     func resetDailyPeak() {
         let current = portfolio.totalEquityUSD()
+        let sig = enabledAccountsSignature
         dailyPeakEquityUSD = current
+        dailyPeakAccountsSignature = sig
         UserDefaults.standard.set(Self.dayStamp(Date()), forKey: Keys.dailyPeakDate)
         UserDefaults.standard.set(current, forKey: Keys.dailyPeakEquity)
+        UserDefaults.standard.set(sig, forKey: Keys.dailyPeakAccounts)
         records.removeValue(forKey: "drawdown-daily")
         evaluatePortfolioRisks()
     }
@@ -302,21 +314,36 @@ final class RiskMonitorEngine {
         let windowSeconds = TimeInterval(max(config.volatilityWindowMinutes, 1) * 60)
         var history = priceSamples[assetID] ?? []
 
-        if let last = history.last, now.timeIntervalSince(last.0) < 5 {
+        // 严格同源比较：若数据源在 OKX 与 Gate 之间切换，重置窗口避免跨源面值差异误报
+        if let last = history.last, last.source != quote.source {
+            priceSamples[assetID] = [PriceSample(time: now, price: quote.price, source: quote.source)]
+            return
+        }
+
+        // 防异常断层脏数据：相邻采样在 30 秒内单步跳变超 35% 视为异常源切换/面值噪音，重置不误报
+        if let last = history.last, last.price > 0 {
+            let stepJump = abs(quote.price - last.price) / last.price * 100
+            if now.timeIntervalSince(last.time) < 30 && stepJump >= 35.0 {
+                priceSamples[assetID] = [PriceSample(time: now, price: quote.price, source: quote.source)]
+                return
+            }
+        }
+
+        if let last = history.last, now.timeIntervalSince(last.time) < 5 {
             // 降频采样，保持极低内存占用
         } else {
-            history.append((now, quote.price))
+            history.append(PriceSample(time: now, price: quote.price, source: quote.source))
         }
 
         let cutoff = now.addingTimeInterval(-windowSeconds)
-        history.removeAll { $0.0 < cutoff }
+        history.removeAll { $0.time < cutoff }
         priceSamples[assetID] = history
 
         guard let oldest = history.first,
-              oldest.1 > 0,
-              now.timeIntervalSince(oldest.0) >= 20 else { return }
+              oldest.price > 0,
+              now.timeIntervalSince(oldest.time) >= 20 else { return }
 
-        let changePct = (quote.price - oldest.1) / oldest.1 * 100
+        let changePct = (quote.price - oldest.price) / oldest.price * 100
         guard abs(changePct) >= config.volatilityThresholdPercent else { return }
 
         let key = "vol-\(assetID)"
@@ -328,7 +355,7 @@ final class RiskMonitorEngine {
         let directionWord = changePct > 0 ? "急速拉升" : "快速下挫"
         let symbol = assetID.split(separator: "-").first.map(String.init) ?? assetID
         let title = "\(symbol) \(config.volatilityWindowMinutes)分钟\(directionWord) \(MarketFormatter.changePercent(changePct))"
-        let body = "\(assetID) 现价 \(MarketFormatter.price(quote.price))（\(config.volatilityWindowMinutes) 分钟前 \(MarketFormatter.price(oldest.1))）"
+        let body = "\(assetID) 现价 \(MarketFormatter.price(quote.price))（\(config.volatilityWindowMinutes) 分钟前 \(MarketFormatter.price(oldest.price))）"
 
         records[key] = TriggerRecord(triggeredAt: now, metricValue: abs(changePct))
         dispatcher.dispatch(
@@ -345,13 +372,23 @@ final class RiskMonitorEngine {
 
     // MARK: 防刷屏判定逻辑
 
+    private var enabledAccountsSignature: String {
+        portfolio.enabledAccounts.map(\.id.uuidString).sorted().joined(separator: ",")
+    }
+
     private func updateDailyPeakIfNeeded(currentEquity: Double) {
         let today = Self.dayStamp(Date())
+        let sig = enabledAccountsSignature
         let defaults = UserDefaults.standard
-        if defaults.string(forKey: Keys.dailyPeakDate) != today {
+
+        // 跨日、或启用账户集合发生变化（增删/开关账户）时自动重新校准今日峰值，避免假回撤告警
+        if defaults.string(forKey: Keys.dailyPeakDate) != today || dailyPeakAccountsSignature != sig {
             dailyPeakEquityUSD = currentEquity
+            dailyPeakAccountsSignature = sig
             defaults.set(today, forKey: Keys.dailyPeakDate)
             defaults.set(currentEquity, forKey: Keys.dailyPeakEquity)
+            defaults.set(sig, forKey: Keys.dailyPeakAccounts)
+            records.removeValue(forKey: "drawdown-daily")
         } else if currentEquity > dailyPeakEquityUSD {
             dailyPeakEquityUSD = currentEquity
             defaults.set(currentEquity, forKey: Keys.dailyPeakEquity)
