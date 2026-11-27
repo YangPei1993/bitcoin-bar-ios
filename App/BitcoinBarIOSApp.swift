@@ -23,6 +23,7 @@ final class AppContainer {
 
     var selectedTab = 0
     var marketPath: [CryptoAsset] = []
+    var portfolioPath: [CryptoAsset] = []
     var toastMessage: String?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
@@ -223,27 +224,14 @@ private struct RootTabView: View {
                         onShowToast: { container.showToast($0) }
                     )
                     .navigationDestination(for: CryptoAsset.self) { asset in
-                        AssetDetailView(
-                            asset: asset,
-                            hub: container.hub,
-                            tickerStore: container.tickerStore,
-                            watchlist: container.watchlist,
-                            alertStore: container.alertStore,
-                            liveActivity: container.liveActivity,
-                            settings: container.settings,
-                            aiCache: container.aiCache,
-                            onOpenAISettings: {
-                                container.selectedTab = 3
-                            },
-                            onShowToast: { container.showToast($0) }
-                        )
+                        assetDetailView(for: asset)
                     }
                 }
                 .tabItem { Label("行情", systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(0)
 
                 // Tab 2: 资产与仓位
-                NavigationStack {
+                NavigationStack(path: $container.portfolioPath) {
                     PortfolioView(
                         portfolio: container.portfolioStore,
                         riskEngine: container.riskEngine,
@@ -253,10 +241,13 @@ private struct RootTabView: View {
                             container.selectedTab = 3
                         },
                         onSelectPositionAsset: { asset in
-                            container.openAssetDetail(asset)
+                            container.portfolioPath.append(asset)
                         },
                         onShowToast: { container.showToast($0) }
                     )
+                    .navigationDestination(for: CryptoAsset.self) { asset in
+                        assetDetailView(for: asset)
+                    }
                 }
                 .tabItem { Label("资产", systemImage: "wallet.bifold") }
                 .badge(container.riskEngine.activePortfolioRisks.count)
@@ -309,5 +300,23 @@ private struct RootTabView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: container.toastMessage)
+    }
+
+    @ViewBuilder
+    private func assetDetailView(for asset: CryptoAsset) -> some View {
+        AssetDetailView(
+            asset: asset,
+            hub: container.hub,
+            tickerStore: container.tickerStore,
+            watchlist: container.watchlist,
+            alertStore: container.alertStore,
+            liveActivity: container.liveActivity,
+            settings: container.settings,
+            aiCache: container.aiCache,
+            onOpenAISettings: {
+                container.selectedTab = 3
+            },
+            onShowToast: { container.showToast($0) }
+        )
     }
 }
